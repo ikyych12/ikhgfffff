@@ -4,27 +4,37 @@ import { Server } from "socket.io";
 import path from "path";
 import cors from "cors";
 import { createServer as createViteServer } from "vite";
-import { initDb, getDb } from "./src/server/db.js";
-import { dockerService } from "./src/server/docker.js";
+import { initDb, getDb } from "./src/server/db";
+import { dockerService } from "./src/server/docker";
 import jwt from "jsonwebtoken";
 import bcrypt from "bcryptjs";
 import multer from "multer";
 import fs from "fs-extra";
 
-const JWT_SECRET = "pterodactyl-mirror-secret-key-change-me";
+const JWT_SECRET = process.env.JWT_SECRET || "pterodactyl-mirror-secret-key-change-me";
 
 async function startServer() {
-  await initDb();
-  const db = getDb();
+  try {
+    await fs.ensureDir(path.join(process.cwd(), "volumes"));
+    await fs.ensureDir(path.join(process.cwd(), "uploads"));
+    
+    await initDb();
+    console.log("Database initialized");
+    const db = getDb();
 
-  const app = express();
-  const httpServer = createServer(app);
-  const io = new Server(httpServer, {
-    cors: { origin: "*" }
-  });
+    const app = express();
+    const httpServer = createServer(app);
+    const io = new Server(httpServer, {
+      cors: { origin: "*" }
+    });
 
-  app.use(cors());
-  app.use(express.json());
+    app.use(cors());
+    app.use(express.json());
+
+    // Health check route - very top
+    app.get("/api/health", (req, res) => {
+      res.json({ status: "ok", mode: process.env.NODE_ENV });
+    });
 
   // --- Auth Middleware ---
   const authenticate = (req: any, res: any, next: any) => {
@@ -265,6 +275,10 @@ async function startServer() {
   httpServer.listen(PORT, "0.0.0.0", () => {
     console.log(`Pterodactyl Mirror running at http://localhost:${PORT}`);
   });
+  } catch (err) {
+    console.error("Critical server startup error:", err);
+    process.exit(1);
+  }
 }
 
 startServer().catch(console.error);
