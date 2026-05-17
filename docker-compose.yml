@@ -1,0 +1,19 @@
+version: '3.8'
+
+services:
+  panel:
+    build: .
+    ports:
+      - "3000:3000"
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+      - ./volumes:/app/volumes
+      - ./database.sqlite:/app/database.sqlite
+    environment:
+      - NODE_ENV=production
+    restart: always
+
+  # Example target container for images
+  ubuntu-base:
+    image: ubuntu:22.04
+    command: tail -f /dev/null

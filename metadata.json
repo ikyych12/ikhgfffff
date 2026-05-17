@@ -1,0 +1,8 @@
+{
+  "name": "Pterodactyl Mirror Panel",
+  "description": "A full-stack server management panel with real Docker integration, server controls, file management, and resource monitoring.",
+  "requestFramePermissions": [],
+  "majorCapabilities": [
+    "MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"
+  ]
+}
