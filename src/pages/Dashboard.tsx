@@ -48,7 +48,7 @@ export default function Dashboard({ user }: { user: any }) {
   );
 }
 
-function ServerCard({ server }: { server: any }) {
+function ServerCard({ server }: any) {
   const [stats, setStats] = useState({ cpu: 0, ram: 0 });
 
   useEffect(() => {

@@ -32,7 +32,7 @@ async function startServer() {
     if (!authHeader) return res.status(401).json({ error: "No token" });
     const token = authHeader.split(" ")[1];
     try {
-      req.user = jwt.verify(token, JWT_SECRET);
+      (req as any).user = jwt.verify(token, JWT_SECRET);
       next();
     } catch (e) {
       res.status(401).json({ error: "Invalid token" });
@@ -40,7 +40,7 @@ async function startServer() {
   };
 
   const adminOnly = (req: any, res: any, next: any) => {
-    if (req.user.role !== "admin") return res.status(403).json({ error: "Admin only" });
+    if ((req as any).user.role !== "admin") return res.status(403).json({ error: "Admin only" });
     next();
   };
 
@@ -58,10 +58,11 @@ async function startServer() {
   // --- API Routes ---
   app.get("/api/servers", authenticate, async (req, res) => {
     let servers;
-    if (req.user.role === "admin") {
+    const user = (req as any).user;
+    if (user.role === "admin") {
       servers = await db.all("SELECT * FROM servers");
     } else {
-      servers = await db.all("SELECT * FROM servers WHERE owner_id = ?", [req.user.id]);
+      servers = await db.all("SELECT * FROM servers WHERE owner_id = ?", [user.id]);
     }
     res.json(servers);
   });
@@ -97,9 +98,10 @@ async function startServer() {
   app.post("/api/servers/:id/action", authenticate, async (req, res) => {
     const { id } = req.params;
     const { action } = req.body;
+    const user = (req as any).user;
     const server = await db.get("SELECT * FROM servers WHERE id = ?", [id]);
     if (!server) return res.status(404).json({ error: "Not found" });
-    if (req.user.role !== 'admin' && server.owner_id !== req.user.id) return res.status(403).json({ error: "Forbidden" });
+    if (user.role !== 'admin' && server.owner_id !== user.id) return res.status(403).json({ error: "Forbidden" });
 
     try {
       if (action === "start") {
@@ -183,11 +185,12 @@ async function startServer() {
   const upload = multer({ dest: 'uploads/' });
   app.post("/api/servers/:id/upload", authenticate, upload.single('file'), async (req, res) => {
     const { id } = req.params;
-    if (!req.file) return res.status(400).json({ error: "No file uploaded" });
+    const file = (req as any).file;
+    if (!file) return res.status(400).json({ error: "No file uploaded" });
 
     try {
-      const destPath = path.join(process.cwd(), "volumes", id, req.file.originalname);
-      await fs.move(req.file.path, destPath, { overwrite: true });
+      const destPath = path.join(process.cwd(), "volumes", id, file.originalname);
+      await fs.move(file.path, destPath, { overwrite: true });
       res.json({ success: true });
     } catch (e) {
       res.status(500).json({ error: "Upload failed" });
@@ -201,14 +204,18 @@ async function startServer() {
 
     if (!apiKey) return res.status(401).json({ error: "Missing API Key" });
 
-    const user = users.find(u => u.api_key === apiKey);
+    const user = await db.get("SELECT * FROM users WHERE api_key = ?", [apiKey]);
     if (!user) return res.status(403).json({ error: "Invalid API Key" });
 
-    const server = servers.find(s => s.id === serverId && (s.owner_id === user.id || user.role === 'admin'));
-    if (!server) return res.status(404).json({ error: "Node not found or access denied" });
+    const server = await db.get("SELECT * FROM servers WHERE id = ?", [serverId]);
+    if (!server) return res.status(404).json({ error: "Node not found" });
+
+    if (user.role !== 'admin' && server.owner_id !== user.id) {
+      return res.status(403).json({ error: "Access denied" });
+    }
 
     try {
-      const stats = await DockerService.getStats(serverId);
+      const stats = await dockerService.getStats(serverId);
       res.json({
         id: server.id,
         name: server.name,
