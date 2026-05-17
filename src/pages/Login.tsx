@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import axios from 'axios';
+import api from '../lib/api';
 import { motion } from 'motion/react';
 import { Shield, Lock, User } from 'lucide-react';
 
@@ -11,7 +11,7 @@ export default function Login({ onLogin }: { onLogin: (user: any) => void }) {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     try {
-      const res = await axios.post('/api/auth/login', { username, password });
+      const res = await api.post('/api/auth/login', { username, password });
       localStorage.setItem('token', res.data.token);
       localStorage.setItem('user', JSON.stringify(res.data.user));
       onLogin(res.data.user);

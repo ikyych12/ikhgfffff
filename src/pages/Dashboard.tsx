@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
-import axios from 'axios';
+import api from '../lib/api';
 import { motion } from 'motion/react';
 import { Server, Activity, ArrowRight, HardDrive, Cpu, MemoryStick as Memory } from 'lucide-react';
 import { clsx } from 'clsx';
@@ -12,9 +12,7 @@ export default function Dashboard({ user }: { user: any }) {
   useEffect(() => {
     const fetchServers = async () => {
       try {
-        const res = await axios.get('/api/servers', {
-          headers: { Authorization: `Bearer ${localStorage.getItem('token')}` }
-        });
+        const res = await api.get('/api/servers');
         setServers(res.data);
       } catch (err) {
         console.error(err);
@@ -55,9 +53,7 @@ function ServerCard({ server }: any) {
     if (server.status !== 'running') return;
     const interval = setInterval(async () => {
       try {
-        const res = await axios.get(`/api/servers/${server.id}/stats`, {
-          headers: { Authorization: `Bearer ${localStorage.getItem('token')}` }
-        });
+        const res = await api.get(`/api/servers/${server.id}/stats`);
         setStats(res.data);
       } catch (e) {
         // ignore

@@ -1,20 +1,19 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import axios from 'axios';
-import { io } from 'socket.io-client';
+import api, { getSocket } from '../lib/api';
 import { motion, AnimatePresence } from 'motion/react';
-import { Terminal, FileCode, Settings, Play, Square, RotateCw, Send, ChevronRight, Folder, File, HardDrive as FileIcon } from 'lucide-react';
+import { Terminal, FileCode, Settings, Play, Square, RotateCw, Send, ChevronRight, Folder, File, HardDrive as FileIcon, Upload, Loader2 } from 'lucide-react';
 import { clsx } from 'clsx';
 
 function FileList({ serverId }: { serverId: string }) {
   const [files, setFiles] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
+  const [isUploading, setIsUploading] = useState(false);
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   const fetchFiles = async () => {
     try {
-      const res = await axios.get(`/api/servers/${serverId}/files`, {
-        headers: { Authorization: `Bearer ${localStorage.getItem('token')}` }
-      });
+      const res = await api.get(`/api/servers/${serverId}/files`);
       setFiles(res.data);
     } catch (e) { console.error(e); }
     finally { setLoading(false); }
@@ -24,55 +23,120 @@ function FileList({ serverId }: { serverId: string }) {
     fetchFiles();
   }, [serverId]);
 
+  const handleUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    const formData = new FormData();
+    formData.append('file', file);
+
+    setIsUploading(true);
+    try {
+      await api.post(`/api/servers/${serverId}/upload`, formData, {
+        headers: { 
+          'Content-Type': 'multipart/form-data'
+        }
+      });
+      fetchFiles();
+    } catch (e) {
+      alert('Upload failed');
+    } finally {
+      setIsUploading(false);
+      if (fileInputRef.current) fileInputRef.current.value = '';
+    }
+  };
+
+  const downloadFile = async (name: string) => {
+    try {
+      const response = await api.get(`/api/servers/${serverId}/download?filename=${name}`, {
+        responseType: 'blob'
+      });
+      const url = window.URL.createObjectURL(new Blob([response.data]));
+      const link = document.createElement('a');
+      link.href = url;
+      link.setAttribute('download', name);
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+    } catch (e) { alert('Download failed'); }
+  };
+
   const deleteFile = async (name: string) => {
     if (!confirm(`Delete ${name}?`)) return;
     try {
-      await axios.delete(`/api/servers/${serverId}/files?filename=${name}`, {
-        headers: { Authorization: `Bearer ${localStorage.getItem('token')}` }
-      });
+      await api.delete(`/api/servers/${serverId}/files?filename=${name}`);
       fetchFiles();
     } catch (e) { alert('Delete failed'); }
   };
 
   if (loading) return <div className="p-8 text-center text-slate-600 font-mono text-[10px] uppercase animate-pulse tracking-[0.2em]">Syncing volume snapshots...</div>;
-  if (files.length === 0) return (
-    <div className="p-20 text-center flex flex-col items-center">
-      <FileCode className="w-12 h-12 text-slate-800 mb-4" />
-      <span className="text-slate-600 font-medium italic text-sm">Volume is currently empty.</span>
-    </div>
-  );
 
   return (
     <>
-      {files.map((file, i) => (
-        <div key={i} className="flex items-center justify-between p-5 hover:bg-white/5 transition-all group">
-          <div className="flex items-center space-x-4">
-            <div className={clsx(
-              "w-10 h-10 rounded-xl flex items-center justify-center border border-white/5",
-              file.isDir ? "bg-teal-500/10 text-teal-400" : "bg-black/40 text-slate-500"
-            )}>
-              {file.isDir ? <Folder className="w-5 h-5" /> : <File className="w-5 h-5" />}
-            </div>
-            <div className="flex flex-col">
-              <span className="font-medium text-sm group-hover:text-teal-400 transition-colors uppercase tracking-tight">{file.name}</span>
-              <span className="text-[10px] text-slate-600 font-mono uppercase tracking-tighter">
-                {file.isDir ? 'Directory' : `${(file.size / 1024).toFixed(1)} KB`}
-              </span>
-            </div>
-          </div>
-          <div className="flex items-center space-x-6">
-            <button 
-              onClick={() => deleteFile(file.name)}
-              className="opacity-0 group-hover:opacity-100 transition-opacity text-rose-500/50 hover:text-rose-500 uppercase text-[10px] font-black tracking-widest"
-            >
-              Delete
-            </button>
-            <button className="opacity-0 group-hover:opacity-100 transition-opacity text-slate-400 hover:text-white uppercase text-[10px] font-black tracking-widest">
-              Download
-            </button>
-          </div>
+      <div className="bg-white/5 p-5 border-b border-white/5 flex items-center justify-between">
+        <div className="flex items-center gap-4">
+          <span className="text-[10px] uppercase font-bold tracking-[0.2em] text-slate-500">Filesystem</span>
+          <input 
+            type="file" 
+            ref={fileInputRef} 
+            onChange={handleUpload} 
+            className="hidden" 
+          />
+          <button 
+            onClick={() => fileInputRef.current?.click()}
+            disabled={isUploading}
+            className="flex items-center gap-2 px-3 py-1.5 bg-teal-500/10 border border-teal-500/20 rounded-lg text-teal-400 text-[10px] font-bold uppercase tracking-widest hover:bg-teal-500/20 transition-all disabled:opacity-50"
+          >
+            {isUploading ? <Loader2 className="w-3 h-3 animate-spin" /> : <Upload className="w-3 h-3" />}
+            {isUploading ? 'Uploading...' : 'Upload File'}
+          </button>
         </div>
-      ))}
+        <div className="hidden md:flex items-center gap-4 text-[10px] text-slate-600 font-mono">
+          <span>MOUNT: /home/container</span>
+        </div>
+      </div>
+
+      {files.length === 0 ? (
+        <div className="p-20 text-center flex flex-col items-center">
+          <FileCode className="w-12 h-12 text-slate-800 mb-4" />
+          <span className="text-slate-600 font-medium italic text-sm">Volume is currently empty.</span>
+        </div>
+      ) : (
+        <div className="divide-y divide-white/5">
+          {files.map((file, i) => (
+            <div key={i} className="flex items-center justify-between p-5 hover:bg-white/5 transition-all group">
+              <div className="flex items-center space-x-4">
+                <div className={clsx(
+                  "w-10 h-10 rounded-xl flex items-center justify-center border border-white/5",
+                  file.isDir ? "bg-teal-500/10 text-teal-400" : "bg-black/40 text-slate-500"
+                )}>
+                  {file.isDir ? <Folder className="w-5 h-5" /> : <File className="w-5 h-5" />}
+                </div>
+                <div className="flex flex-col">
+                  <span className="font-medium text-sm group-hover:text-teal-400 transition-colors uppercase tracking-tight">{file.name}</span>
+                  <span className="text-[10px] text-slate-600 font-mono uppercase tracking-tighter">
+                    {file.isDir ? 'Directory' : `${(file.size / 1024).toFixed(1)} KB`}
+                  </span>
+                </div>
+              </div>
+              <div className="flex items-center space-x-6">
+                <button 
+                  onClick={() => deleteFile(file.name)}
+                  className="opacity-0 group-hover:opacity-100 transition-opacity text-rose-500/50 hover:text-rose-500 uppercase text-[10px] font-black tracking-widest"
+                >
+                  Delete
+                </button>
+                <button 
+                  onClick={() => downloadFile(file.name)}
+                  className="opacity-0 group-hover:opacity-100 transition-opacity text-slate-400 hover:text-white uppercase text-[10px] font-black tracking-widest"
+                >
+                  Download
+                </button>
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
     </>
   );
 }
@@ -91,9 +155,7 @@ export default function ManageServer({ user }: { user: any }) {
   useEffect(() => {
     const fetchServer = async () => {
       try {
-        const res = await axios.get('/api/servers', {
-          headers: { Authorization: `Bearer ${localStorage.getItem('token')}` }
-        });
+        const res = await api.get('/api/servers');
         const s = res.data.find((s: any) => s.id === id);
         if (!s) return navigate('/');
         setServer(s);
@@ -101,8 +163,7 @@ export default function ManageServer({ user }: { user: any }) {
     };
     fetchServer();
 
-    socketRef.current = io();
-    socketRef.current.emit('join-server', id);
+    socketRef.current = getSocket(id!);
     socketRef.current.on('logs', (newLogs: string) => {
       setLogs(prev => [...prev, newLogs]);
     });
@@ -119,9 +180,7 @@ export default function ManageServer({ user }: { user: any }) {
   const handleAction = async (action: string) => {
     setIsPerformingAction(true);
     try {
-      await axios.post(`/api/servers/${id}/action`, { action }, {
-        headers: { Authorization: `Bearer ${localStorage.getItem('token')}` }
-      });
+      await api.post(`/api/servers/${id}/action`, { action });
       setServer({ ...server, status: action === 'stop' ? 'stopped' : 'running' });
     } catch (e) {
       console.error(e);
@@ -265,16 +324,7 @@ export default function ManageServer({ user }: { user: any }) {
               className="flex-1 p-8"
             >
               <div className="bg-black/40 border border-white/5 rounded-2xl overflow-hidden">
-                <div className="bg-white/5 p-5 border-b border-white/5 flex items-center justify-between">
-                  <span className="text-[10px] uppercase font-bold tracking-[0.2em] text-slate-500">Persistent Storage Volume</span>
-                  <div className="flex items-center gap-4 text-[10px] text-slate-600 font-mono">
-                    <span>MOUNT: /home/container</span>
-                    <span>SIZE: {server.storage}GB</span>
-                  </div>
-                </div>
-                <div className="divide-y divide-white/5">
-                  <FileList serverId={id!} />
-                </div>
+                <FileList serverId={id!} />
               </div>
             </motion.div>
           )}

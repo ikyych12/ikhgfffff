@@ -1,0 +1,18 @@
+{
+  "version": 2,
+  "framework": "vite",
+  "rewrites": [
+    {
+      "source": "/api/(.*)",
+      "destination": "https://ais-pre-wibn5te6qggesnjrwmex57-54398651811.asia-southeast1.run.app/api/$1"
+    },
+    {
+      "source": "/socket.io/(.*)",
+      "destination": "https://ais-pre-wibn5te6qggesnjrwmex57-54398651811.asia-southeast1.run.app/socket.io/$1"
+    },
+    {
+      "source": "/(.*)",
+      "destination": "/index.html"
+    }
+  ]
+}

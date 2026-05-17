@@ -25,10 +25,10 @@ async function startServer() {
     const app = express();
     const httpServer = createServer(app);
     const io = new Server(httpServer, {
-      cors: { origin: "*" }
+      cors: { origin: "*", methods: ["GET", "POST", "PUT", "DELETE"] }
     });
 
-    app.use(cors());
+    app.use(cors({ origin: "*" }));
     app.use(express.json());
 
     // Health check route - very top
@@ -204,6 +204,20 @@ async function startServer() {
       res.json({ success: true });
     } catch (e) {
       res.status(500).json({ error: "Upload failed" });
+    }
+  });
+
+  app.get("/api/servers/:id/download", authenticate, async (req, res) => {
+    const { id } = req.params;
+    const { filename } = req.query;
+    if (!filename) return res.status(400).json({ error: "Filename required" });
+
+    try {
+      const filePath = path.join(process.cwd(), "volumes", id, filename as string);
+      if (!fs.existsSync(filePath)) return res.status(404).json({ error: "File not found" });
+      res.download(filePath);
+    } catch (e) {
+      res.status(500).json({ error: "Download failed" });
     }
   });
 

@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import axios from 'axios';
+import api from '../lib/api';
 import { motion } from 'motion/react';
 import { UserPlus, Plus, Users, Database, ShieldCheck, Key } from 'lucide-react';
 import { clsx } from 'clsx';
@@ -15,10 +15,9 @@ export default function Admin() {
 
   const fetchData = async () => {
     try {
-      const headers = { Authorization: `Bearer ${localStorage.getItem('token')}` };
       const [uRes, sRes] = await Promise.all([
-        axios.get('/api/admin/users', { headers }),
-        axios.get('/api/servers', { headers })
+        api.get('/api/admin/users'),
+        api.get('/api/servers')
       ]);
       setUsers(uRes.data);
       setServers(sRes.data);
@@ -30,9 +29,7 @@ export default function Admin() {
   const createUser = async (e: React.FormEvent) => {
     e.preventDefault();
     try {
-      await axios.post('/api/admin/users', userForm, {
-        headers: { Authorization: `Bearer ${localStorage.getItem('token')}` }
-      });
+      await api.post('/api/admin/users', userForm);
       setUserForm({ username: '', password: '', role: 'user' });
       fetchData();
     } catch (e) { alert('Failed to create user'); }
@@ -41,9 +38,7 @@ export default function Admin() {
   const createServer = async (e: React.FormEvent) => {
     e.preventDefault();
     try {
-      await axios.post('/api/admin/servers', serverForm, {
-        headers: { Authorization: `Bearer ${localStorage.getItem('token')}` }
-      });
+      await api.post('/api/admin/servers', serverForm);
       setServerForm({ name: '', owner_id: '', image: 'ubuntu:22.04', cpu: 0.5, ram: 512, storage: 10 });
       fetchData();
     } catch (e) { alert('Failed to create server'); }
